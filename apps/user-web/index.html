@@ -18305,6 +18305,8 @@ button.persona-ability-item:focus-visible {
       }
   </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./backend-config.js"></script>
+    <script src="./backend-client.js"></script>
     <script src="./supabase-client.js"></script>
   </head>
   <body>
@@ -18360,6 +18362,7 @@ button.persona-ability-item:focus-visible {
         <div class="sidebar-workspace-sections" id="sidebarThreadSections" aria-label="项目和对话"></div>
 
         <div class="task-list" id="taskList"></div>
+
       </aside>
 
       <main class="workspace">
@@ -23169,7 +23172,7 @@ async function renameConversation(conversationId, title) {
     return { title: nextTitle, task_id: "" };
   }
 
-  const res = await fetch(getTaskRuntimeEndpoint(`/tasks/${encodeURIComponent(taskId)}`), {
+  const res = await OPCBackend.request(getTaskRuntimeEndpoint(`/tasks/${encodeURIComponent(taskId)}`), {
     method: "PATCH",
     headers: getTaskRuntimeHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ title: nextTitle }),
@@ -23253,7 +23256,7 @@ async function deleteConversation(conversation) {
     };
   }
 
-  const res = await fetch(getTaskRuntimeEndpoint(`/tasks/${encodeURIComponent(taskId)}`), {
+  const res = await OPCBackend.request(getTaskRuntimeEndpoint(`/tasks/${encodeURIComponent(taskId)}`), {
     method: "DELETE",
     headers: getTaskRuntimeHeaders(),
   });
@@ -24089,6 +24092,11 @@ function handleAttachmentDrop(event) {
 }
 
 async function uploadAttachment(file) {
+  if (!window.OPCBackend.isConfigured()) {
+    toast("后端未配置，附件上传暂不可用");
+    return;
+  }
+
   const uploadSessionId = crypto.randomUUID();
   const fileType = getAttachmentFileType(file);
   state.pendingAttachments.push({
@@ -24106,7 +24114,7 @@ async function uploadAttachment(file) {
   formData.append("upload_session_id", uploadSessionId);
 
   try {
-    const res = await fetch(getAttachmentEndpoint("/attachments/upload"), {
+    const res = await OPCBackend.request(getAttachmentEndpoint("/attachments/upload"), {
       method: "POST",
       headers: getSupabaseAuthHeaders(),
       body: formData,
@@ -24140,7 +24148,7 @@ async function removeAttachment(id) {
   const attachment = (state.pendingAttachments || []).find((item) => item.id === id);
   try {
     if (attachment && attachment.status !== "uploading") {
-      const res = await fetch(getAttachmentEndpoint(`/attachments/${encodeURIComponent(id)}`), {
+      const res = await OPCBackend.request(getAttachmentEndpoint(`/attachments/${encodeURIComponent(id)}`), {
         method: "DELETE",
         headers: getSupabaseAuthHeaders(),
       });
@@ -24162,7 +24170,7 @@ async function prefillImages() {
   if (imageIds.length === 0) return "";
 
   try {
-    const res = await fetch(getAttachmentEndpoint("/attachments/prefill"), {
+    const res = await OPCBackend.request(getAttachmentEndpoint("/attachments/prefill"), {
       method: "POST",
       headers: getSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ attachment_ids: imageIds }),
@@ -24333,7 +24341,7 @@ async function cancelStreaming() {
   const SUPABASE_URL = window.SUPABASE_URL;
   const ANON_KEY = window.SUPABASE_ANON_KEY;
   try {
-    const res = await fetch(SUPABASE_URL + "/functions/v1/task-runtime/messages/cancel", {
+    const res = await OPCBackend.request(SUPABASE_URL + "/functions/v1/task-runtime/messages/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
       body: JSON.stringify({ message_id: mid }),
@@ -24369,7 +24377,7 @@ async function retryMessageFrontend(messageId) {
   render();
 
   try {
-    const res = await fetch(SUPABASE_URL + "/functions/v1/task-runtime/messages/retry", {
+    const res = await OPCBackend.request(SUPABASE_URL + "/functions/v1/task-runtime/messages/retry", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
       body: JSON.stringify({ message_id: messageId }),
@@ -24492,6 +24500,11 @@ async function sendMessage() {
     return;
   }
 
+  if (!window.OPCBackend.isConfigured()) {
+    toast("后端未配置，当前仅展示界面");
+    return;
+  }
+
   const imagePrefill = await prefillImages();
   const contentText = [imagePrefill, text].filter(Boolean).join("\n\n") || "Please continue based on the attached files.";
   const displayText = text || "[Attachment]";
@@ -24602,7 +24615,7 @@ async function sendMessage() {
     return changed;
   }
 
-  fetch(SUPABASE_URL + "/functions/v1/task-runtime/messages/send", {
+  OPCBackend.request(SUPABASE_URL + "/functions/v1/task-runtime/messages/send", {
     method: "POST",
     signal: state.streamingAbortController?.signal,
     headers: {
@@ -38847,7 +38860,7 @@ function updatePlanMessageStatus(messageId, status) {
         const _legacyConfirmPlanStub = async function _legacyConfirmPlanStub(messageId) {
   const SUPABASE_URL = String(window.SUPABASE_URL || "").replace(/\/$/, "");
   const ANON_KEY = window.ANON_KEY || window.SUPABASE_ANON_KEY || "";
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/task-runtime/plans/confirm`, {
+  const res = await OPCBackend.request(`${SUPABASE_URL}/functions/v1/task-runtime/plans/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
     body: JSON.stringify({ message_id: messageId }),
@@ -38876,7 +38889,7 @@ function cancelModify(messageId) {
   if (!feedback) return;
   const SUPABASE_URL = String(window.SUPABASE_URL || "").replace(/\/$/, "");
   const ANON_KEY = window.ANON_KEY || window.SUPABASE_ANON_KEY || "";
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/task-runtime/plans/modify`, {
+  const res = await OPCBackend.request(`${SUPABASE_URL}/functions/v1/task-runtime/plans/modify`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY },
     body: JSON.stringify({ message_id: messageId, feedback }),
@@ -39182,7 +39195,7 @@ loadTasksAndConversations();
     try {
       actionsBar = document.querySelector('.plan-actions');
       if (actionsBar) actionsBar.style.display = 'none';
-      const resp = await fetch(window.SUPABASE_URL + '/functions/v1/task-runtime/plans/confirm', {
+      const resp = await OPCBackend.request(window.SUPABASE_URL + '/functions/v1/task-runtime/plans/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY, apikey: window.SUPABASE_ANON_KEY },
         body: JSON.stringify({ message_id: messageId }),
@@ -39240,7 +39253,7 @@ loadTasksAndConversations();
     if (btn) { btn.disabled = true; btn.textContent = '提交中...'; }
     let _newPlanMessageId = null;
     try {
-      const resp = await fetch(window.SUPABASE_URL + '/functions/v1/task-runtime/plans/modify', {
+      const resp = await OPCBackend.request(window.SUPABASE_URL + '/functions/v1/task-runtime/plans/modify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY, apikey: window.SUPABASE_ANON_KEY },
         body: JSON.stringify({ message_id: messageId, feedback }),
